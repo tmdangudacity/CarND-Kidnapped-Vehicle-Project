@@ -112,6 +112,4 @@ public:
     }
 };
 
-
-
 #endif /* PARTICLE_FILTER_H_ */

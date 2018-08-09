@@ -1,10 +1,3 @@
-/*
- * particle_filter.cpp
- *
- *  Created on: Dec 12, 2016
- *      Author: Tiffany Huang
- */
-
 #include <random>
 #include <algorithm>
 #include <iostream>
@@ -19,14 +12,9 @@
 
 using namespace std;
 
-void ParticleFilter::init(double x, double y, double theta, double std[]) 
+void ParticleFilter::init(double x, double y, double theta, double std[])
 {
-    // Set the number of particles. Initialize all particles to first position (based on estimates of
-    // x, y, theta and their uncertainties from GPS) and all weights to 1.
-    // Add random Gaussian noise to each particle.
-    // NOTE: Consult particle_filter.h for more information about this method (and others in this file).
-
-    num_particles = 200;
+    num_particles = 15;
 
     default_random_engine gen;
 
@@ -57,7 +45,6 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
         */
 
         particles.push_back(temp_particle);
-
         weights.push_back(temp_particle.weight);
     }
 
@@ -66,14 +53,9 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
 
 void ParticleFilter::prediction(double delta_t, double std_pos[], double velocity, double yaw_rate)
 {
-    // Add measurements to each particle and add random Gaussian noise.
-    // NOTE: When adding noise you may find std::normal_distribution and std::default_random_engine useful.
-    //  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
-    //  http://www.cplusplus.com/reference/random/default_random_engine/
-
     default_random_engine gen;
-    normal_distribution<double> dist_x(0.0,     std_pos[0]);
-    normal_distribution<double> dist_y(0.0,     std_pos[1]);
+    normal_distribution<double> dist_x(0.0, std_pos[0]);
+    normal_distribution<double> dist_y(0.0, std_pos[1]);
     normal_distribution<double> dist_theta(0.0, std_pos[2]);
 
     Particle temp_particle;
@@ -132,8 +114,8 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         }
 
         //Adding Gaussian noise for X, Y and Theta
-        particles[i].x     = x + dist_x(gen);
-        particles[i].y     = y + dist_y(gen);
+        particles[i].x     = x     + dist_x(gen);
+        particles[i].y     = y     + dist_y(gen);
         particles[i].theta = theta + dist_theta(gen);
 
         /*
@@ -149,118 +131,163 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 
 void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations)
 {
-    // TODO: Find the predicted measurement that is closest to each observed measurement and assign the
-    //   observed measurement to this particular landmark.
-    // NOTE: this method will NOT be called by the grading code. But you will probably find it useful to
-    //   implement this method and use it as a helper during the updateWeights phase.
-
+    //Not implemented
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                                    const std::vector<LandmarkObs> &observations, const Map &map_landmarks)
 {
-    // TODO: Update the weights of each particle using a mult-variate Gaussian distribution. You can read
-    //   more about this distribution here: https://en.wikipedia.org/wiki/Multivariate_normal_distribution
-    // NOTE: The observations are given in the VEHICLE'S coordinate system. Your particles are located
-    //   according to the MAP'S coordinate system. You will need to transform between the two systems.
-    //   Keep in mind that this transformation requires both rotation AND translation (but no scaling).
-    //   The following is a good resource for the theory:
-    //   https://www.willamette.edu/~gorr/classes/GeneralGraphics/Transforms/transforms2d.htm
-    //   and the following is a good resource for the actual equation to implement (look at equation
-    //   3.33
-    //   http://planning.cs.uiuc.edu/node99.html
+    const double GAUSSIAN_NORM       = 0.5 / (M_PI * std_landmark[0] * std_landmark[1]);
+    const double ONE_ON_2_SIGMAX_2   = 0.5 / (std_landmark[0] * std_landmark[0]);
+    const double ONE_ON_2_SIGMAY_2   = 0.5 / (std_landmark[1] * std_landmark[1]);
 
-    /*
-    static unsigned int counter = 0;
+    //Find nearest landmarks within sensor range around each particle
+    std::vector< std::vector<Map::single_landmark_s> > nearest_landmarks;
 
-        for(unsigned int j = 0; j < observations.size(); ++j)
-        {
-            std::cout << "Counter: " << (++counter) << ", Observation " << observations[j].id << ", X: "  << observations[j].x << ", Y: "  << observations[j].y << std::endl;
-        }
-    */
-
-    const double GAUSSIAN_NORM = 1.0 / (2.0 * M_PI * std_landmark[0] * std_landmark[1]);
-    const double ONE_ON_2_SIGMAX_2   = 1.0 / (2.0 * std_landmark[0] * std_landmark[0]);
-    const double ONE_ON_2_SIGMAY_2   = 1.0 / (2.0 * std_landmark[1] * std_landmark[1]);
-
-    for(unsigned int i = 0; i < particles.size(); ++i)
+    for(unsigned int pt_id = 0; pt_id < particles.size(); ++pt_id)
     {
-        std::cout << "Particle " << i << ", X: " << particles[i].x << ", Y: " << particles[i].y << ", Theta: " << particles[i].theta << std::endl;
+        std::vector<Map::single_landmark_s>landmark_vector;
 
-        double final_weight = 1.0;
-
-        for(unsigned int j = 0; j < observations.size(); ++j)
+        for(unsigned int lm_id = 0; lm_id < map_landmarks.landmark_list.size(); ++lm_id)
         {
-            std::cout << "Observation " << observations[j].id << ", X: "  << observations[j].x << ", Y: "  << observations[j].y << std::endl;
+            double particle_dist = dist(particles[pt_id].x, particles[pt_id].y, (map_landmarks.landmark_list[lm_id]).x_f, (map_landmarks.landmark_list[lm_id]).y_f);
 
-            double x_obs_map = particles[i].x + cos(particles[i].theta) * observations[j].x - sin(particles[i].theta) * observations[j].y;
-            double y_obs_map = particles[i].y + sin(particles[i].theta) * observations[j].x + cos(particles[i].theta) * observations[j].y;
-
-            std::cout << "Converted observation, X: " << x_obs_map << ", Y: " << y_obs_map << std::endl;
-
-            //Reset nearest distance to uninitialised and nearest landmark not found
-            double temp_dist = 0.0;
-            double nearest_dist = -1.0;
-            //double found_nearest_landmark = false;
-
-            double x_nearest_landmark = 0.0;
-            double y_nearest_landmark = 0.0;
-
-            for(unsigned int k = 0; k < map_landmarks.landmark_list.size(); ++k)
+            if(particle_dist < sensor_range)
             {
-                temp_dist = dist(x_obs_map, y_obs_map, map_landmarks.landmark_list[k].x_f, map_landmarks.landmark_list[k].y_f);
+                landmark_vector.push_back(map_landmarks.landmark_list[lm_id]);
+            }
+        }
 
-                //if( !(temp_dist > sensor_range) )
-                //{
-                    if( (nearest_dist == -1.0) || (temp_dist < nearest_dist) )
-                    {
-                        nearest_dist = temp_dist;
-                        x_nearest_landmark = map_landmarks.landmark_list[k].x_f;
-                        y_nearest_landmark = map_landmarks.landmark_list[k].y_f;
-                        //found_nearest_landmark = true;
-                    }
-                //}
-                //else
-                //{
-                //    std::cout << "Landmark "   << k << " (" << map_landmarks.landmark_list[k].x_f << ", " << map_landmarks.landmark_list[k].y_f
-                //               << "), has distance " << temp_dist << " > sensor range " << sensor_range << "! Ignored!" << std::endl;
-                //}
+        nearest_landmarks.push_back(landmark_vector);
+    }
+
+    //Vector of multivariate Gaussian probabilities for each particle
+    std::vector<double> gaussian_probs;
+    double sum_particle_raw_weight = 0.0;
+
+    for(unsigned int pt_id = 0; pt_id < particles.size(); ++pt_id)
+    {
+        /*
+        std::cout << "Update weight for Particle[" << pt_id
+                  << "]: (" << particles[pt_id].x
+                  << ", "   << particles[pt_id].y
+                  << ", "   << particles[pt_id].theta
+                  << ", "   << particles[pt_id].weight
+                  << ")"    << std::endl;
+        */
+
+        //Reset vector of Gaussian probabilities
+        gaussian_probs.clear();
+
+        for(unsigned int obs_id = 0; obs_id < observations.size(); ++obs_id)
+        {
+            //std::cout << " - Observation[" << obs_id << "]: ("  << observations[obs_id].x << ", "  << observations[obs_id].y << ")" << std::endl;
+
+            //Convert observation to map coordinates w.r.t the current particle
+            double x_obs_map = particles[pt_id].x + cos(particles[pt_id].theta) * observations[obs_id].x - sin(particles[pt_id].theta) * observations[obs_id].y;
+            double y_obs_map = particles[pt_id].y + sin(particles[pt_id].theta) * observations[obs_id].x + cos(particles[pt_id].theta) * observations[obs_id].y;
+
+            //std::cout << " - Converted to Map coordinates (" << x_obs_map << ", " << y_obs_map << ")" << std::endl;
+
+            //Search for nearest landmark around the current particle
+            double dist_obs              =   0.0;
+            double nearest_dist          =  -1.0;
+            double x_nearest_landmark    =   0.0;
+            double y_nearest_landmark    =   0.0;
+            bool found_nearest_landmark  = false;
+
+            for(unsigned int lm_id = 0; lm_id < (nearest_landmarks[pt_id].size()); ++lm_id)
+            {
+                dist_obs = dist(x_obs_map, y_obs_map, (nearest_landmarks[pt_id][lm_id]).x_f, (nearest_landmarks[pt_id][lm_id]).y_f);
+
+                if( (-1.0 == nearest_dist) || (dist_obs < nearest_dist) )
+                {
+                    nearest_dist           = dist_obs;
+                    x_nearest_landmark     = (nearest_landmarks[pt_id][lm_id]).x_f;
+                    y_nearest_landmark     = (nearest_landmarks[pt_id][lm_id]).y_f;
+                    found_nearest_landmark = true;
+                }
             }
 
-            //if(found_nearest_landmark)
-            //{
+            //Compute a multivariate Gaussian probability for the current observation w.r.t the current particle
+            if(found_nearest_landmark)
+            {
                 double delta_x    = (x_obs_map - x_nearest_landmark);
                 double delta_y    = (y_obs_map - y_nearest_landmark);
-                double obs_weight = GAUSSIAN_NORM * exp( -(ONE_ON_2_SIGMAX_2 * delta_x * delta_x + ONE_ON_2_SIGMAY_2 * delta_y * delta_y));
+                double obs_weight = GAUSSIAN_NORM * exp( -((ONE_ON_2_SIGMAX_2 * delta_x * delta_x) + (ONE_ON_2_SIGMAY_2 * delta_y * delta_y)) );
 
-                //if(0.0 == final_weight)
-                //{
-                //    final_weight = obs_weight;
-                //}
-                //else
-                //{
-                    final_weight *= obs_weight;
-                //}
+                gaussian_probs.push_back(obs_weight);
 
-                std::cout << "Weight from observation: " << obs_weight << ", Updated final weight: " << final_weight << std::endl;
-            //}
-            //else
-            //{
-                //std::cout << "Nearest landmark within sensor range " << sensor_range << " not found!" << std::endl;
-            //}
+                /*
+                std::cout << " - Nearest Landmark"
+                          << " (" << x_nearest_landmark << ", " << y_nearest_landmark << ")"
+                          << ", Raw weight from Observation: "  << obs_weight << std::endl;
+                */
+            }
         }
 
-        particles[i].weight = final_weight;
+        //Multiply multivariate Gaussian probabilities for observations w.r.t the current particle.
+        if(gaussian_probs.size())
+        {
+            particles[pt_id].weight = 1.0;
 
-        std::cout << "Particle " << i << " final weight: " << particles[i].weight << std::endl;
+            for(unsigned int gp_id = 0; gp_id < gaussian_probs.size(); ++gp_id)
+            {
+                particles[pt_id].weight *= gaussian_probs[gp_id];
+            }
+        }
+        else
+        {
+            particles[pt_id].weight = 0.0;
+        }
+
+        //Sum of all raw particle weights
+        sum_particle_raw_weight += particles[pt_id].weight;
+    }
+
+    //Normalise particle weights
+    if(sum_particle_raw_weight > 0.0)
+    {
+        for(unsigned int pt_id = 0; pt_id < particles.size(); ++pt_id)
+        {
+            particles[pt_id].weight /= sum_particle_raw_weight;
+            weights[pt_id]           = particles[pt_id].weight;
+
+            //std::cout << " - Normalised weight of Particle[" << pt_id<< "]: " << particles[pt_id].weight << std::endl;
+        }
     }
 }
 
-void ParticleFilter::resample() {
-    // TODO: Resample particles with replacement with probability proportional to their weight.
-    // NOTE: You may find std::discrete_distribution helpful here.
-    //   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
+void ParticleFilter::resample()
+{
+    //C++ re-implementation of Python Resampling wheel from the lesson.
 
+    default_random_engine gen;
+
+    uniform_int_distribution<int> uniform_random_id(0, num_particles - 1);
+
+    double max_weight = *(std::max_element(weights.begin(), weights.end()));
+    uniform_real_distribution<double> uniform_random_weight(0.0, (2.0 * max_weight));
+
+    int index = uniform_random_id(gen);
+    double beta = 0.0;
+
+    vector<Particle> temp_particles;
+
+    for(unsigned int pt_id = 0; pt_id < particles.size(); ++pt_id)
+    {
+        beta += uniform_random_weight(gen);
+
+        while(beta > weights[index])
+        {
+            beta -= weights[index];
+            index = (index + 1) % num_particles;
+        }
+
+        temp_particles.push_back(particles[index]);
+    }
+
+    particles = temp_particles;
 }
 
 void ParticleFilter::SetAssociations(Particle& particle, const std::vector<int>& associations,
@@ -304,3 +331,4 @@ string ParticleFilter::getSenseY(Particle best)
     s = s.substr(0, s.length()-1);  // get rid of the trailing space
     return s;
 }
+
