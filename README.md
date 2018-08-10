@@ -5,7 +5,7 @@
 This repository contains all the code implemented for the Localization course in Udacity's Self-Driving Car Nanodegree.
 
 ## Submission
-A completed version of 2 dimensional `particle_filter.cpp` [particle_filter.cpp](./src/particle_filter.cpp) was implemented in C++ and is located in the [./src](./src/) directory. The filter operates with a map, some initial localization information (GPS), observation and control data at each time step.
+A completed version of 2 dimensional [particle_filter.cpp](./src/particle_filter.cpp) was implemented in C++ and is located in the [./src](./src/) directory. The filter operates with a map, some initial localization information (GPS), observation and control data at each time step.
 
 
 ## Running the Code
